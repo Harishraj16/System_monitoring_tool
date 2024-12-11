@@ -1,15 +1,11 @@
 #include <iostream>
-#include <cstdio>
-#include <cstring>
-#include <memory>
 #include <vector>
 #include <thread>
 #include <chrono>
-#include <string>
+#include <cstdlib>
 
 using namespace std;
 
-// Notification interface and implementations
 class Notification {
 public:
     virtual void send(const string& message) = 0;
@@ -30,116 +26,73 @@ public:
     }
 };
 
-// NotificationType Enum
-enum class NotificationType {
-    EMAIL,
-    SMS
-};
-
-// NotificationCreator Factory
-class NotificationCreator {
-public:
-    shared_ptr<Notification> create(NotificationType type) {
-        if (type == NotificationType::EMAIL)
-            return make_shared<EmailNotification>();
-        else if (type == NotificationType::SMS)
-            return make_shared<SMSNotification>();
-        else
-            return nullptr;
-    }
-};
-
-// EventManager for managing subscribers
 class EventManager {
 private:
-    vector<shared_ptr<Notification>> subscribers;
+    vector<Notification*> observers;
 
 public:
-    void addSubscriber(shared_ptr<Notification> subscriber) {
-        subscribers.push_back(subscriber);
+    void subscribe(Notification* observer) {
+        observers.push_back(observer);
     }
 
-    void notifySubscribers(const string& message) {
-        for (auto& subscriber : subscribers)
-            subscriber->send(message);
-    }
-};
-
-// Function to execute a system command and get the output
-std::string executeCommand(const char* cmd) {
-    char buffer[128];
-    std::string result = "";
-    FILE* pipe = popen(cmd, "r");
-    if (!pipe) {
-        std::cerr << "popen failed!" << std::endl;
-        return result;
-    }
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        result += buffer;
-    }
-    pclose(pipe);
-    return result;
-}
-
-// SystemMetrics class to fetch system data
-class SystemMetrics {
-public:
-    int getCPUUsage() {
-        std::string cpuUsage = executeCommand("top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}'");
-        return std::stoi(cpuUsage);  // Convert the output string to an integer
-    }
-
-    int getMemoryUsage() {
-        std::string memoryUsage = executeCommand("free | grep Mem | awk '{print $3/$2 * 100.0}'");
-        return std::stoi(memoryUsage);  // Convert the output string to an integer
-    }
-};
-
-// MonitoringSystem class to monitor system metrics and send alerts
-class MonitoringSystem {
-private:
-    SystemMetrics metrics;
-    shared_ptr<EventManager> eventManager;
-    int cpuLimit;
-    int memoryLimit;
-
-public:
-    MonitoringSystem(shared_ptr<EventManager> manager, int cpuThreshold, int memoryThreshold)
-        : eventManager(manager), cpuLimit(cpuThreshold), memoryLimit(memoryThreshold) {}
-
-    void monitor() {
-        while (true) {
-            int currentCPU = metrics.getCPUUsage();
-            int currentMemory = metrics.getMemoryUsage();
-
-            if (currentCPU > cpuLimit) {
-                eventManager->notifySubscribers("High CPU Usage: " + to_string(currentCPU) + "%");
-            }
-
-            if (currentMemory > memoryLimit) {
-                eventManager->notifySubscribers("High Memory Usage: " + to_string(currentMemory) + "%");
-            }
-
-            this_thread::sleep_for(chrono::seconds(2));  // Delay between checks
+    void notify(const string& message) {
+        for (auto observer : observers) {
+            observer->send(message);
         }
     }
 };
 
-// Main function to initialize the system and start monitoring
+class Metrics {
+public:
+    int getCPUUsage() {
+        return rand() % 100;
+    }
+
+    int getMemoryUsage() {
+        return rand() % 100;
+    }
+};
+
+class MonitoringSystem {
+private:
+    Metrics metrics;
+    EventManager& eventManager;
+    int cpuThreshold;
+    int memoryThreshold;
+
+public:
+    MonitoringSystem(EventManager& em, int cpuTh, int memTh)
+        : eventManager(em), cpuThreshold(cpuTh), memoryThreshold(memTh) {}
+
+    void monitor() {
+        while (true) {
+            int cpuUsage = metrics.getCPUUsage();
+            int memoryUsage = metrics.getMemoryUsage();
+
+            if (cpuUsage > cpuThreshold) {
+                eventManager.notify("High CPU Usage: " + to_string(cpuUsage) + "%");
+            }
+
+            if (memoryUsage > memoryThreshold) {
+                eventManager.notify("High Memory Usage: " + to_string(memoryUsage) + "%");
+            }
+
+            this_thread::sleep_for(chrono::seconds(2));
+        }
+    }
+};
+
 int main() {
-    // Create an event manager and notification factory
-    auto eventManager = make_shared<EventManager>();
-    NotificationCreator creator;
+    EventManager eventManager;
+    EmailNotification emailNotification;
+    SMSNotification smsNotification;
 
-    // Add email and SMS notification subscribers
-    eventManager->addSubscriber(creator.create(NotificationType::EMAIL));
-    eventManager->addSubscriber(creator.create(NotificationType::SMS));
+    eventManager.subscribe(&emailNotification);
+    eventManager.subscribe(&smsNotification);
 
-    // Initialize the monitoring system with thresholds (e.g., 75% CPU, 80% memory)
-    MonitoringSystem system(eventManager, 75, 80);
+    MonitoringSystem monitoringSystem(eventManager, 75, 80);
 
-    // Start monitoring in a separate thread
-    thread monitoringThread(&MonitoringSystem::monitor, &system);
+    thread monitoringThread(&MonitoringSystem::monitor, &monitoringSystem);
     monitoringThread.join();
 
     return 0;

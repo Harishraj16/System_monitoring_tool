@@ -1,99 +1,95 @@
-#include <iostream>
-#include <vector>
-#include <thread>
-#include <chrono>
-#include <cstdlib>
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
-using namespace std;
+interface Notification {
+    void send(String message);
+}
 
-class Notification {
-public:
-    virtual void send(const string& message) = 0;
-    virtual ~Notification() = default;
-};
-
-class EmailNotification : public Notification {
-public:
-    void send(const string& message) override {
-        cout << "Email Alert: " << message << endl;
+class EmailNotification implements Notification {
+    @Override
+    public void send(String message) {
+        System.out.println("Email Alert: " + message);
     }
-};
+}
 
-class SMSNotification : public Notification {
-public:
-    void send(const string& message) override {
-        cout << "SMS Alert: " << message << endl;
+class SMSNotification implements Notification {
+    @Override
+    public void send(String message) {
+        System.out.println("SMS Alert: " + message);
     }
-};
+}
 
 class EventManager {
-private:
-    vector<Notification*> observers;
+    private final List<Notification> observers = new ArrayList<>();
 
-public:
-    void subscribe(Notification* observer) {
-        observers.push_back(observer);
+    public void subscribe(Notification observer) {
+        observers.add(observer);
     }
 
-    void notify(const string& message) {
-        for (auto observer : observers) {
-            observer->send(message);
+    public void notifyObservers(String message) {
+        for (Notification observer : observers) {
+            observer.send(message);
         }
     }
-};
+}
 
 class Metrics {
-public:
-    int getCPUUsage() {
-        return rand() % 100;
+    private final Random rand = new Random();
+
+    public int getCPUUsage() {
+        return rand.nextInt(100);
     }
 
-    int getMemoryUsage() {
-        return rand() % 100;
+    public int getMemoryUsage() {
+        return rand.nextInt(100);
     }
-};
+}
 
-class MonitoringSystem {
-private:
-    Metrics metrics;
-    EventManager& eventManager;
-    int cpuThreshold;
-    int memoryThreshold;
+class MonitoringSystem implements Runnable {
+    private final Metrics metrics = new Metrics();
+    private final EventManager eventManager;
+    private final int cpuThreshold;
+    private final int memoryThreshold;
 
-public:
-    MonitoringSystem(EventManager& em, int cpuTh, int memTh)
-        : eventManager(em), cpuThreshold(cpuTh), memoryThreshold(memTh) {}
+    public MonitoringSystem(EventManager eventManager, int cpuThreshold, int memoryThreshold) {
+        this.eventManager = eventManager;
+        this.cpuThreshold = cpuThreshold;
+        this.memoryThreshold = memoryThreshold;
+    }
 
-    void monitor() {
+    @Override
+    public void run() {
         while (true) {
             int cpuUsage = metrics.getCPUUsage();
             int memoryUsage = metrics.getMemoryUsage();
 
             if (cpuUsage > cpuThreshold) {
-                eventManager.notify("High CPU Usage: " + to_string(cpuUsage) + "%");
+                eventManager.notifyObservers("High CPU Usage: " + cpuUsage + "%");
             }
 
             if (memoryUsage > memoryThreshold) {
-                eventManager.notify("High Memory Usage: " + to_string(memoryUsage) + "%");
+                eventManager.notifyObservers("High Memory Usage: " + memoryUsage + "%");
             }
 
-            this_thread::sleep_for(chrono::seconds(2));
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
     }
-};
+}
 
-int main() {
-    EventManager eventManager;
-    EmailNotification emailNotification;
-    SMSNotification smsNotification;
+public class Main {
+    public static void main(String[] args) {
+        EventManager eventManager = new EventManager();
+        eventManager.subscribe(new EmailNotification());
+        eventManager.subscribe(new SMSNotification());
 
-    eventManager.subscribe(&emailNotification);
-    eventManager.subscribe(&smsNotification);
-
-    MonitoringSystem monitoringSystem(eventManager, 75, 80);
-
-    thread monitoringThread(&MonitoringSystem::monitor, &monitoringSystem);
-    monitoringThread.join();
-
-    return 0;
+        MonitoringSystem monitoringSystem = new MonitoringSystem(eventManager, 75, 80);
+        Thread monitoringThread = new Thread(monitoringSystem);
+        monitoringThread.start();
+    }
 }
